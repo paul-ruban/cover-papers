@@ -1,8 +1,12 @@
+# Creates an excel file with all cover papers for visa applications ready to be dispatched to the
+# consulate. Takes into account citizenship, visa type, service type and places at most 10 applications per page
+
 from xlsxwriter import Workbook
 from datetime import datetime
 from xlrd import open_workbook
-from tkinter.filedialog import askopenfilename, askdirectory
-from tkinter import Tk, Button
+from tkinter.filedialog import askopenfilename
+from tkinter import Tk, Button, messagebox
+from os import path
 
 VISATYPES = {'ОБЫКНОВЕННАЯ ТУРИСТИЧЕСКАЯ': 'TOURIST',
              'ОБЫКНОВЕННАЯ ДЕЛОВАЯ': 'BUSINESS',
@@ -23,22 +27,25 @@ SERVICETYPES = {'Срочная 1 день': 'RUSH',
 
 
 class Visa:
-    def __init__(self, visatype, entries, citizenship, servicetype, price, quantity, applications):
+    def __init__(self, visatype, entries, citizenship, service_type, price, quantity, applications):
         self.visaType = visatype
         self.entries = entries
         self.citizenship = citizenship
-        self.serviceType = servicetype
+        self.serviceType = service_type
         self.price = int(price)
         self.quantity = int(quantity)
-        self.applications = applications.replace(' ', '').split(',')
-        for app in self.applications:
+        self.applications = list()
+        temporary_list = applications.replace(' ', '').split(',')
+        for app in temporary_list:
             if '-' in app:
-                self.applications.remove(app)
                 limits = app.split('-')
                 start = int(limits[0])
                 end = int(limits[1])
-                for n in range(end - start + 1):
-                    self.applications.append(str(n + start))
+                # print(start, end)
+                for n in range(start, end + 1):
+                    self.applications.append(n)
+            else:
+                self.applications.append(int(app))
         self.applications = self.divide_in_pages(self.applications)
 
     @staticmethod
@@ -82,8 +89,9 @@ def process_file():
             )
             data.append(current_row)
 
-    file_directory = askdirectory()
-    workbook = Workbook(file_directory + '/Cover Papers ' + datetime.now().strftime('%d.%m.%Y %H-%M-%S') + '.xlsx')
+    directory = path.dirname(file)
+    output_file_name = directory + '/Cover Papers ' + datetime.now().strftime('%d.%m.%Y %H-%M-%S') + '.xlsx'
+    workbook = Workbook(output_file_name)
     format_header = workbook.add_format({'font_size': 32, 'bold': True, 'align': 'center'})
     format_applications = workbook.add_format(
         {'font_size': 24, 'bold': True, 'align': 'center', 'border': 1, 'bg_color': '#fafafa'})
@@ -91,12 +99,12 @@ def process_file():
     worksheet = workbook.add_worksheet()
     col = 3
 
-    for d in data:
-        for page in d.applications:
-            worksheet.write(0, col, d.citizenship, format_header)
-            worksheet.write(1, col, VISATYPES.get(d.visaType), format_header)
-            worksheet.write(2, col, NUMSOFENTRIES.get(d.entries), format_header)
-            worksheet.write(3, col, SERVICETYPES.get(d.serviceType), format_header)
+    for entry in data:
+        for page in entry.applications:
+            worksheet.write(0, col, entry.citizenship, format_header)
+            worksheet.write(1, col, VISATYPES.get(entry.visaType), format_header)
+            worksheet.write(2, col, NUMSOFENTRIES.get(entry.entries), format_header)
+            worksheet.write(3, col, SERVICETYPES.get(entry.serviceType), format_header)
             row = 7
             i = 0
             for application in page:
@@ -106,13 +114,15 @@ def process_file():
             for j in range(10 - i):
                 worksheet.write(row, col, "", format_applications)
                 row += 1
-            worksheet.write(20, col, str(i) + ' / ' + str(d.quantity), format_footer)
+            worksheet.write(20, col, str(i) + ' / ' + str(entry.quantity), format_footer)
             worksheet.write(21, col, 'TOTAL', format_footer)
-            worksheet.write(22, col, i * d.price, format_footer)
+            worksheet.write(22, col, i * entry.price, format_footer)
             worksheet.set_column(col, col, 35)
+            # worksheet.write(23, col + 2, str(datetime.today()))
             col += 6
 
     workbook.close()
+    messagebox.showinfo(title='Success!', message='Cover Papers are ready! CHEERS!')
 
 
 def main():
